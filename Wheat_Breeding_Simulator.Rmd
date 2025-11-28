@@ -1,0 +1,102 @@
+---
+title: "Wheat Breeding Simulator with AlphaSimR"
+author: "M. Abdur Rehman"
+date: "2025-11-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+*Introduction*
+
+This project simulates a simple wheat line-breeding program using the AlphaSimR package in R. The goal is to follow a self-pollinated crop over multiple selection cycles, show how mean genetic value increases, and visualize when genetic gain starts to plateau.
+
+*Methods*
+
+Crop and trait: Self-pollinated wheat with one additive trait whose genetic values are centered around 0 with moderate variance.
+
+Founder population: 100 founder lines simulated on 10 chromosomes with segregating sites per chromosome for genetic variation.
+
+Simulation parameters: Individuals treated as hermaphrodites (SP$setSexes("no")), heritability h2 = 0.3, and 2 replicates per line.
+
+Breeding cycle: In each of 10 cycles, select the top 10% of lines by phenotype, self them to create progeny, re-simulate phenotypes, and record the mean true genetic value.
+
+*Simulation code*
+
+```{r}
+rm(list = ls())
+set.seed(123)
+library(AlphaSimR)
+
+# Founder wheat population and trait
+nFounders <- 100
+nChr <- 10
+segSitesPerChr <- 50
+
+founderPop <- quickHaplo(
+  nInd = nFounders,
+  nChr = nChr,
+  segSites = segSitesPerChr
+)
+
+SP <- SimParam$new(founderPop)
+SP$addTraitA(nQtlPerChr = 10, mean = 0, var = 1)
+SP$setSexes("no")
+
+# Initial population (cycle 0) and phenotypes
+h2 <- 0.3
+reps <- 2
+
+pop <- newPop(founderPop, simParam = SP)
+pop <- setPheno(pop, h2 = h2, reps = reps)
+
+# Breeding loop: selection + selfing
+nCycles <- 10
+selectProp <- 0.1
+
+mean_gv <- numeric(nCycles + 1)
+mean_gv[1] <- mean(pop@gv)
+
+currentPop <- pop
+
+for(cycle in 1:nCycles){
+  nSelected <- ceiling(selectProp * currentPop@nInd)
+  selected <- selectInd(
+    pop = currentPop,
+    use = "pheno",
+    nInd = nSelected
+  )
+  nextPop <- self(
+    pop = selected,
+    nProgeny = 5
+  )
+  nextPop <- setPheno(
+    pop = nextPop,
+    h2 = h2,
+    reps = reps
+  )
+  mean_gv[cycle + 1] <- mean(nextPop@gv)
+  currentPop <- nextPop
+}
+
+cycle_index <- 0:nCycles
+```
+
+*Results*
+
+```{r}
+plot(
+  cycle_index, mean_gv,
+  type = "b",
+  xlab = "Cycle",
+  ylab = "Mean genetic value",
+  main = "Genetic gain across cycles"
+)
+
+```
+The plot shows a sharp increase in mean genetic value over the first few cycles, followed by a plateau as genetic variance is exhausted by repeated selection and selfing. This pattern matches expectations for strong phenotypic selection in a self-pollinated breeding program.
+
+*Discussion*
+This mini simulator demonstrates how a breeder can use AlphaSimR to explore simple line-breeding strategies in wheat. The script can be extended by changing parameters like selection intensity, number of cycles, or progeny per parent, and by adding additional traits or scenarios to compare different breeding strategies.
